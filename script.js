@@ -83,10 +83,8 @@ function makeMove(index, symbol) {
     if (symbol === 'X') playerScore++;
     else botScore++;
     updateScores();
-    setTimeout(() => {
-      triggerConfetti();
-      shakeBoard();
-    }, 200);
+    triggerConfetti();
+    shakeBoard();
   }
 
   switchTurn();
@@ -136,155 +134,104 @@ function autoPlayerMove() {
 function botMove() {
   if (!isGameActive) return;
 
-  let move;
-  if (difficulty === 'easy') {
-    move = randomMove();
-  } else if (difficulty === 'medium') {
-    move = smartMove(2); // lookahead 2
-  } else {
-    move = smartMove(4); // lookahead 4
+  let move = null;
+  const empty = getEmptyCells();
+
+  // Smart move for medium & hard
+  if (difficulty === 'hard' || (difficulty === 'medium' && Math.random() < 0.6)) {
+    move = findSmartMove('O') || findSmartMove('X'); // try win or block
   }
 
-  if (move == null) {
-    move = randomMove();
+  if (!move) {
+    const rand = empty[Math.floor(Math.random() * empty.length)];
+    move = rand;
   }
+
   makeMove(move, 'O');
 }
 
-function randomMove() {
-  const emptyCells = board.map((v, i) => v === '' ? i : null).filter(v => v !== null);
-  if (emptyCells.length === 0) return null;
-  return emptyCells[Math.floor(Math.random() * emptyCells.length)];
-}
-
-function smartMove(depth = 2) {
-  // simple Minimax-inspired bot
-  let bestScore = -Infinity;
-  let move = null;
-
-  for (let i = 0; i < board.length; i++) {
-    if (board[i] === '') {
-      board[i] = 'O';
-      let score = minimax(board, depth, false);
-      board[i] = '';
-      if (score > bestScore) {
-        bestScore = score;
-        move = i;
-      }
+function findSmartMove(symbol) {
+  const empty = getEmptyCells();
+  for (let idx of empty) {
+    board[idx] = symbol;
+    if (checkWin(symbol)) {
+      board[idx] = '';
+      return idx;
     }
-  }
-  return move;
-}
-
-function minimax(newBoard, depth, isMaximizing) {
-  const winner = checkWinSimple();
-  if (winner === 'O') return 10;
-  if (winner === 'X') return -10;
-  if (!newBoard.includes('')) return 0;
-  if (depth === 0) return 0;
-
-  if (isMaximizing) {
-    let best = -Infinity;
-    for (let i = 0; i < newBoard.length; i++) {
-      if (newBoard[i] === '') {
-        newBoard[i] = 'O';
-        best = Math.max(best, minimax(newBoard, depth - 1, false));
-        newBoard[i] = '';
-      }
-    }
-    return best;
-  } else {
-    let best = Infinity;
-    for (let i = 0; i < newBoard.length; i++) {
-      if (newBoard[i] === '') {
-        newBoard[i] = 'X';
-        best = Math.min(best, minimax(newBoard, depth - 1, true));
-        newBoard[i] = '';
-      }
-    }
-    return best;
-  }
-}
-
-function checkWin(symbol) {
-  const lines = getLines();
-  let found = false;
-
-  lines.forEach(line => {
-    if (line.every(idx => board[idx] === symbol)) {
-      highlightWinningCells(line);
-      found = true;
-    }
-  });
-
-  return found;
-}
-
-function checkWinSimple() {
-  const lines = getLines();
-  for (let line of lines) {
-    if (line.every(idx => board[idx] === 'X')) return 'X';
-    if (line.every(idx => board[idx] === 'O')) return 'O';
+    board[idx] = '';
   }
   return null;
 }
 
-function getLines() {
-  let lines = [];
+function getEmptyCells() {
+  return board.map((val, i) => val === '' ? i : null).filter(v => v !== null);
+}
 
-  for (let r = 0; r < boardSize; r++) {
-    for (let c = 0; c < boardSize; c++) {
-      let idx = r * boardSize + c;
+function checkWin(symbol) {
+  const lines = getLines();
+  let winFound = false;
+
+  lines.forEach(line => {
+    if (line.every(idx => board[idx] === symbol)) {
+      line.forEach(idx => {
+        const cell = boardContainer.querySelector(`[data-index='${idx}']`);
+        if (cell) {
+          cell.classList.add('win');
+        }
+      });
+      winFound = true;
+    }
+  });
+
+  return winFound;
+}
+
+function getLines() {
+  const lines = [];
+
+  for (let row = 0; row < boardSize; row++) {
+    for (let col = 0; col < boardSize; col++) {
+      const base = row * boardSize + col;
 
       // Horizontal
-      if (c <= boardSize - requiredInRow) {
-        let row = [];
+      if (col <= boardSize - requiredInRow) {
+        let line = [];
         for (let i = 0; i < requiredInRow; i++) {
-          row.push(idx + i);
+          line.push(base + i);
         }
-        lines.push(row);
+        lines.push(line);
       }
 
       // Vertical
-      if (r <= boardSize - requiredInRow) {
-        let col = [];
+      if (row <= boardSize - requiredInRow) {
+        let line = [];
         for (let i = 0; i < requiredInRow; i++) {
-          col.push(idx + i * boardSize);
+          line.push(base + i * boardSize);
         }
-        lines.push(col);
+        lines.push(line);
       }
 
-      // Diagonal right
-      if (r <= boardSize - requiredInRow && c <= boardSize - requiredInRow) {
-        let diag1 = [];
+      // Diagonal Right
+      if (col <= boardSize - requiredInRow && row <= boardSize - requiredInRow) {
+        let line = [];
         for (let i = 0; i < requiredInRow; i++) {
-          diag1.push(idx + i * (boardSize + 1));
+          line.push(base + i * (boardSize + 1));
         }
-        lines.push(diag1);
+        lines.push(line);
       }
 
-      // Diagonal left
-      if (r <= boardSize - requiredInRow && c >= requiredInRow - 1) {
-        let diag2 = [];
+      // Diagonal Left
+      if (col >= requiredInRow - 1 && row <= boardSize - requiredInRow) {
+        let line = [];
         for (let i = 0; i < requiredInRow; i++) {
-          diag2.push(idx + i * (boardSize - 1));
+          line.push(base + i * (boardSize - 1));
         }
-        lines.push(diag2);
+        lines.push(line);
       }
     }
   }
-  return lines;
-}
 
-function highlightWinningCells(cells) {
-  cells.forEach(idx => {
-    const cell = boardContainer.querySelector(`[data-index='${idx}']`);
-    if (cell) {
-      cell.style.backgroundColor = '#00f0ff';
-      cell.style.color = '#fff';
-      cell.style.fontWeight = 'bold';
-    }
-  });
+  return lines;
 }
 
 function triggerConfetti() {
@@ -301,15 +248,13 @@ function triggerConfetti() {
 
 function shakeBoard() {
   boardContainer.classList.add('shake');
-  setTimeout(() => {
-    boardContainer.classList.remove('shake');
-  }, 500);
+  setTimeout(() => boardContainer.classList.remove('shake'), 500);
 }
 
-// Buttons
+// Button Actions
 startBtn.addEventListener('click', startGame);
 rematchBtn.addEventListener('click', startGame);
 homeBtn.addEventListener('click', () => {
-  menu.style.display = 'block';
   game.style.display = 'none';
+  menu.style.display = 'block';
 });
